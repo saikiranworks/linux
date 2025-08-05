@@ -264,8 +264,13 @@ int qcom_q6v5_request_stop(struct qcom_q6v5 *q6v5, struct qcom_sysmon *sysmon)
 
 	q6v5->running = false;
 
-	/* A watchdog/fatal IRQ clears running; logical crashes still need a stop. */
-	if (!was_running || qcom_sysmon_shutdown_acked(sysmon))
+	/*
+	 * A watchdog/fatal IRQ already cleared running for a real crash, but a
+	 * host-triggered logical crash still needs a stop, and so does a
+	 * still-detached remote that hasn't been attached to yet.
+	 */
+	if ((!was_running && q6v5->rproc->state != RPROC_DETACHED) ||
+	    qcom_sysmon_shutdown_acked(sysmon))
 		return 0;
 
 	qcom_smem_state_update_bits(q6v5->state,
