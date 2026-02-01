@@ -1528,9 +1528,20 @@ void msm_dp_bridge_hpd_notify(struct drm_bridge *bridge,
 	struct msm_dp_bridge *msm_dp_bridge = to_dp_bridge(bridge);
 	struct msm_dp *msm_dp_display = msm_dp_bridge->msm_dp_display;
 	struct msm_dp_display_private *dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+	struct device *dev = &msm_dp_display->pdev->dev;
 	u32 hpd_link_status = 0;
 
-	if (pm_runtime_resume_and_get(&msm_dp_display->pdev->dev)) {
+	/*
+	 * Fix: unexpected hotplug during suspend.
+	 * If the device is not runtime active, we cannot handle the IRQ safely.
+	 * The HPD event will be re-checked when the bridge is enabled.
+	 */
+	if (pm_runtime_suspended(dev)) {
+		drm_dbg_dp(dp->drm_dev, "Dropping HPD event during suspend\n");
+		return;
+	}
+
+	if (pm_runtime_resume_and_get(dev)) {
 		DRM_ERROR("failed to pm_runtime_resume\n");
 		return;
 	}
