@@ -5326,17 +5326,16 @@ static int qmp_combo_probe(struct platform_device *pdev)
 	 * Enable runtime PM before creating the PHYs, phy_create() only enables
 	 * it on the PHY devices if already enabled on the parent. Hold a usage
 	 * reference so callbacks cannot run until the PHY is ready.
+	 *
+	 * Runtime PM is forbidden by default; users can allow it again via the
+	 * power/control attribute in sysfs.
 	 */
 	pm_runtime_get_noresume(dev);
 	pm_runtime_set_active(dev);
+	pm_runtime_forbid(dev);
 	ret = devm_pm_runtime_enable(dev);
 	if (ret)
 		goto err_pm_put;
-	/*
-	 * Prevent runtime pm from being ON by default. Users can enable
-	 * it using power/control in sysfs.
-	 */
-	pm_runtime_forbid(dev);
 
 	ret = qmp_combo_register_clocks(qmp, usb_np, dp_np);
 	if (ret)
