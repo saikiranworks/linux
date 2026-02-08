@@ -2192,6 +2192,7 @@ static bool msm_dp_ctrl_send_phy_test_pattern(struct msm_dp_ctrl_private *ctrl)
 
 static int msm_dp_ctrl_on_pixel_clk(struct msm_dp_ctrl_private *ctrl, unsigned long pixel_rate)
 {
+	int retries;
 	int ret;
 
 	ret = clk_set_rate(ctrl->pixel_clk, pixel_rate * 1000);
@@ -2203,9 +2204,25 @@ static int msm_dp_ctrl_on_pixel_clk(struct msm_dp_ctrl_private *ctrl, unsigned l
 	if (WARN_ON_ONCE(ctrl->stream_clks_on))
 		return 0;
 
-	ret = clk_prepare_enable(ctrl->pixel_clk);
+	/*
+	 * After deep sleep (S3), the display clock controller GDSC
+	 * and parent PLLs may not have fully stabilized by the time
+	 * the DRM atomic restore runs. The pixel clock branch gate
+	 * can be stuck at 'off' temporarily, returning -EBUSY.
+	 * Retry with delays to allow hardware to settle.
+	 */
+	for (retries = 0; retries < 5; retries++) {
+		ret = clk_prepare_enable(ctrl->pixel_clk);
+		if (!ret)
+			break;
+		drm_dbg_dp(ctrl->drm_dev,
+			   "pixel clk enable retry %d/%d (ret=%d)\n",
+			   retries + 1, 5, ret);
+		usleep_range(2000, 5000);
+	}
 	if (ret) {
-		DRM_ERROR("Failed to start pixel clocks. ret=%d\n", ret);
+		DRM_ERROR("Failed to start pixel clocks after %d retries. ret=%d\n",
+			  retries, ret);
 		return ret;
 	}
 	ctrl->stream_clks_on = true;
@@ -2653,6 +2670,30 @@ void msm_dp_ctrl_off_link(struct msm_dp_ctrl *msm_dp_ctrl,
 	msm_dp_ctrl_mainlink_disable(ctrl);
 
 	msm_dp_ctrl_reset(&ctrl->msm_dp_ctrl, panel);
+
+	msm_dp_ctrl_link_clk_disable(&ctrl->msm_dp_ctrl);
+
+	phy_power_off(phy);
+}
+
+void msm_dp_ctrl_off_wedged(struct msm_dp_ctrl *msm_dp_ctrl)
+{
+	struct msm_dp_ctrl_private *ctrl;
+	struct phy *phy;
+
+	ctrl = container_of(msm_dp_ctrl, struct msm_dp_ctrl_private, msm_dp_ctrl);
+	phy = ctrl->phy;
+
+	/*
+	 * When the DPU encoder is wedged, skip DP controller MMIO writes
+	 * (mainlink_disable, panel vsc, controller reset) to avoid potential
+	 * bus hangs. Only clean up clocks and PHY PLL, which are safe.
+	 *
+	 * Without this, link_clks_on stays true after the wedge disconnect,
+	 * causing the next msm_dp_ctrl_on_stream() to skip phy_power_on,
+	 * leaving the pixel clock permanently stuck at 'off' on reconnect.
+	 */
+	msm_dp_ctrl_off_pixel_clk(msm_dp_ctrl);
 
 	msm_dp_ctrl_link_clk_disable(&ctrl->msm_dp_ctrl);
 

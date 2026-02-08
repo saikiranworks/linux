@@ -12,6 +12,8 @@
 #include <drm/drm_crtc.h>
 #include "dpu_hw_mdss.h"
 
+struct msm_display_topology;
+
 #define DPU_ENCODER_FRAME_EVENT_DONE			BIT(0)
 #define DPU_ENCODER_FRAME_EVENT_ERROR			BIT(1)
 #define DPU_ENCODER_FRAME_EVENT_PANEL_DEAD		BIT(2)
@@ -98,4 +100,6 @@ void dpu_encoder_cleanup_wb_job(struct drm_encoder *drm_enc,
 bool dpu_encoder_is_valid_for_commit(struct drm_encoder *drm_enc);
 
 void dpu_encoder_start_frame_done_timer(struct drm_encoder *drm_enc);
+
+bool dpu_encoder_is_wedged(struct drm_encoder *drm_enc);
 #endif /* __DPU_ENCODER_H__ */

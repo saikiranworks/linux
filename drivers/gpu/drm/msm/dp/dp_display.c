@@ -27,6 +27,7 @@
 #include "dp_drm.h"
 #include "dp_audio.h"
 #include "dp_debug.h"
+#include "disp/dpu1/dpu_encoder.h"
 
 static bool psr_enabled = false;
 module_param(psr_enabled, bool, 0);
@@ -1449,8 +1450,11 @@ void msm_dp_display_atomic_enable(struct msm_dp *msm_dp_display,
 	}
 
 	rc = msm_dp_display_enable(dp, dp->panel);
-	if (rc)
-		DRM_ERROR("DP display enable failed, rc=%d\n", rc);
+	if (rc) {
+		DRM_ERROR("DP display enable failed, aborting stream start, rc=%d\n", rc);
+		msm_dp_display_host_phy_exit(dp);
+		return;
+	}
 
 	rc = msm_dp_display_post_enable(msm_dp_display);
 	if (rc) {
@@ -1481,6 +1485,18 @@ void msm_dp_display_atomic_disable(struct msm_dp *dp)
 	if (!dp->power_on)
 		return;
 
+	/*
+	 * If the DPU encoder is wedged (hardware frozen after suspend),
+	 * skip push_idle which writes to DP registers and waits for a
+	 * completion that will never come from dead hardware.
+	 * This prevents a bus hang / kernel panic on USB-C disconnect.
+	 */
+	if (dp->bridge && dp->bridge->encoder &&
+	    dpu_encoder_is_wedged(dp->bridge->encoder)) {
+		drm_dbg_dp(dp->drm_dev, "encoder wedged, skipping push_idle\n");
+		return;
+	}
+
 	msm_dp_ctrl_push_idle(msm_dp_display->ctrl);
 }
 
@@ -1498,6 +1514,29 @@ void msm_dp_display_atomic_post_disable(struct msm_dp *dp)
 	struct msm_dp_display_private *msm_dp_display;
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
+
+	/*
+	 * If DPU encoder is wedged, skip DP controller MMIO writes (mainlink
+	 * disable, controller reset) that could hang if the display AXI fabric
+	 * is unstable. But DO clean up link clocks and the PHY PLL safely.
+	 *
+	 * Without proper clock cleanup, ctrl->link_clks_on stays true after
+	 * wedge disconnect, causing the next msm_dp_ctrl_on_stream() to skip
+	 * phy_power_on entirely. That leaves the pixel clock permanently stuck
+	 * at 'off' on reconnect, so the second monitor never comes back on.
+	 */
+	if (dp->bridge && dp->bridge->encoder &&
+	    dpu_encoder_is_wedged(dp->bridge->encoder)) {
+		DRM_WARN("encoder wedged, performing safe DP clock/PHY cleanup\n");
+		guard(mutex)(&msm_dp_display->plugged_lock);
+		msm_dp_ctrl_off_wedged(msm_dp_display->ctrl);
+		msm_dp_display_host_phy_exit(msm_dp_display);
+		dp->power_on = false;
+		msm_dp_display->plugged = false;
+		msm_dp_display_handle_plugged_change(dp, false);
+		pm_runtime_put_sync(&dp->pdev->dev);
+		return;
+	}
 
 	if (dp->is_edp)
 		msm_dp_hpd_unplug_handle(msm_dp_display);
