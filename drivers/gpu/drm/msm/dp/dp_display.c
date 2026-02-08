@@ -27,6 +27,7 @@
 #include "dp_drm.h"
 #include "dp_audio.h"
 #include "dp_debug.h"
+#include "disp/dpu1/dpu_encoder.h"
 
 static bool psr_enabled = false;
 module_param(psr_enabled, bool, 0);
@@ -1440,8 +1441,10 @@ void msm_dp_display_atomic_enable(struct msm_dp *msm_dp_display,
 	}
 
 	rc = msm_dp_display_enable(dp, dp->panel);
-	if (rc)
+	if (rc) {
 		DRM_ERROR("DP display enable failed, rc=%d\n", rc);
+		return;
+	}
 
 	rc = msm_dp_display_post_enable(msm_dp_display);
 	if (rc) {
@@ -1457,6 +1460,17 @@ void msm_dp_display_atomic_disable(struct msm_dp *dp)
 	struct msm_dp_display_private *msm_dp_display;
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
+
+	/*
+	 * If the DPU encoder is wedged (hardware frozen after suspend),
+	 * skip push_idle which writes to DP registers and waits for a
+	 * completion that will never come from dead hardware.
+	 * This prevents a bus hang / kernel panic on USB-C disconnect.
+	 */
+	if (dp->bridge && dp->bridge->encoder && dpu_encoder_is_wedged(dp->bridge->encoder)) {
+		drm_dbg_dp(dp->drm_dev, "encoder wedged, skipping push_idle\n");
+		return;
+	}
 
 	msm_dp_ctrl_push_idle(msm_dp_display->ctrl);
 }
@@ -1475,6 +1489,23 @@ void msm_dp_display_atomic_post_disable(struct msm_dp *dp)
 	struct msm_dp_display_private *msm_dp_display;
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
+
+	/*
+	 * If DPU encoder is wedged, skip all hardware access in post_disable.
+	 * msm_dp_display_disable() calls msm_dp_ctrl_off() which does MMIO
+	 * to the DP controller, mainlink disable, PHY power off etc.
+	 * When the display hardware is frozen, these MMIO accesses can cause
+	 * a bus hang leading to kernel panic and spontaneous reboot.
+	 * Just update software state and release runtime PM.
+	 */
+	if (dp->bridge && dp->bridge->encoder && dpu_encoder_is_wedged(dp->bridge->encoder)) {
+		DRM_WARN("encoder wedged, skipping DP hardware disable\n");
+		dp->power_on = false;
+		msm_dp_display->phy_initialized = false;
+		msm_dp_display_handle_plugged_change(dp, false);
+		pm_runtime_put_sync(&dp->pdev->dev);
+		return;
+	}
 
 	if (dp->is_edp)
 		msm_dp_hpd_unplug_handle(msm_dp_display);
