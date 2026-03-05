@@ -951,6 +951,13 @@
 	status = "okay";
 };
 
+&remoteproc_soccp {
+	firmware-name = "qcom/glymur/soccp.mbn",
+			"qcom/glymur/soccp_dtb.mbn";
+
+	status = "okay";
+};
+
 &sdhc_2 {
 	vmmc-supply = <&vreg_l9b_e0_2p9>;
 	vqmmc-supply = <&vreg_l2b_e0_2p9>;
@@ -975,11 +982,6 @@
 &smb2370_k_e2_eusb2_repeater {
 	vdd18-supply = <&vreg_l15b_e0_1p8>;
 	vdd3-supply = <&vreg_l7b_e0_2p79>;
-};
-
-&remoteproc_soccp {
-	firmware-name = "qcom/glymur/soccp.mbn",
-			"qcom/glymur/soccp_dtb.mbn";
 };
 
 &tlmm {
