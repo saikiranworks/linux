@@ -2331,8 +2331,8 @@
 			};
 		};
 
-		remoteproc_soccp: remoteproc@d00000 {
-			compatible = "qcom,glymur-soccp-pas";
+		remoteproc_soccp: remoteproc-soccp@d00000 {
+			compatible = "qcom,glymur-soccp-pas", "qcom,kaanapali-soccp-pas";
 			reg = <0x0 0x00d00000 0x0 0x200000>;
 
 			interrupts-extended = <&intc GIC_SPI 167 IRQ_TYPE_EDGE_RISING>,
