@@ -2777,9 +2777,11 @@ static int wsa_macro_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = clk_set_rate(wsa->npl, WSA_MACRO_MCLK_FREQ);
-	if (ret)
-		return ret;
+	if (wsa->npl) {
+		ret = clk_set_rate(wsa->npl, WSA_MACRO_MCLK_FREQ);
+		if (ret)
+			return ret;
+	}
 
 	ret = devm_pm_clk_create(dev);
 	if (ret)
