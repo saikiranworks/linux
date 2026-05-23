@@ -881,46 +881,6 @@
 	status = "okay";
 };
 
-&remoteproc_adsp {
-	firmware-name = "qcom/glymur/adsp.mbn",
-			"qcom/glymur/adsp_dtb.mbn";
-
-	status = "okay";
-};
-
-&remoteproc_cdsp {
-	firmware-name = "qcom/glymur/cdsp.mbn",
-			"qcom/glymur/cdsp_dtb.mbn";
-
-	status = "okay";
-};
-
-&sdhc_2 {
-	vmmc-supply = <&vreg_l9b_e0_2p9>;
-	vqmmc-supply = <&vreg_l2b_e0_2p9>;
-
-	pinctrl-0 = <&sdc2_default_state &sdc2_card_det_n>;
-	pinctrl-1 = <&sdc2_sleep_state &sdc2_card_det_n>;
-	pinctrl-names = "default", "sleep";
-
-	cd-gpios = <&tlmm 221 GPIO_ACTIVE_LOW>;
-
-	no-mmc;
-	no-sdio;
-
-	status = "okay";
-};
-
-&smb2370_j_e2_eusb2_repeater {
-	vdd18-supply = <&vreg_l15b_e0_1p8>;
-	vdd3-supply = <&vreg_l7b_e0_2p79>;
-};
-
-&smb2370_k_e2_eusb2_repeater {
-	vdd18-supply = <&vreg_l15b_e0_1p8>;
-	vdd3-supply = <&vreg_l7b_e0_2p79>;
-};
-
 &swr0 {
 	status = "okay";
 
@@ -975,6 +935,46 @@
 		vdd-io-supply = <&vreg_l18b_e0_1p2>;
 		qcom,port-mapping = <4 5 6 7 13 15>;
 	};
+};
+
+&remoteproc_adsp {
+	firmware-name = "qcom/glymur/adsp.mbn",
+			"qcom/glymur/adsp_dtb.mbn";
+
+	status = "okay";
+};
+
+&remoteproc_cdsp {
+	firmware-name = "qcom/glymur/cdsp.mbn",
+			"qcom/glymur/cdsp_dtb.mbn";
+
+	status = "okay";
+};
+
+&sdhc_2 {
+	vmmc-supply = <&vreg_l9b_e0_2p9>;
+	vqmmc-supply = <&vreg_l2b_e0_2p9>;
+
+	pinctrl-0 = <&sdc2_default_state &sdc2_card_det_n>;
+	pinctrl-1 = <&sdc2_sleep_state &sdc2_card_det_n>;
+	pinctrl-names = "default", "sleep";
+
+	cd-gpios = <&tlmm 221 GPIO_ACTIVE_LOW>;
+
+	no-mmc;
+	no-sdio;
+
+	status = "okay";
+};
+
+&smb2370_j_e2_eusb2_repeater {
+	vdd18-supply = <&vreg_l15b_e0_1p8>;
+	vdd3-supply = <&vreg_l7b_e0_2p79>;
+};
+
+&smb2370_k_e2_eusb2_repeater {
+	vdd18-supply = <&vreg_l15b_e0_1p8>;
+	vdd3-supply = <&vreg_l7b_e0_2p79>;
 };
 
 &remoteproc_soccp {
