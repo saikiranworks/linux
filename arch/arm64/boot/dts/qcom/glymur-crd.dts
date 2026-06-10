@@ -13,6 +13,12 @@
 	compatible = "qcom,glymur-crd", "qcom,glymur";
 };
 
+&iris {
+	firmware-name = "qcom/vpu/vpu36_p4_s7.mbn";
+
+	status = "okay";
+};
+
 &mdss_dp0 {
 	status = "okay";
 };
