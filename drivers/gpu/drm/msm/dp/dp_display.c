@@ -1443,6 +1443,7 @@ void msm_dp_display_atomic_enable(struct msm_dp *msm_dp_display,
 	rc = msm_dp_display_enable(dp, dp->panel);
 	if (rc) {
 		DRM_ERROR("DP display enable failed, rc=%d\n", rc);
+		msm_dp_display_host_phy_exit(dp);
 		return;
 	}
 
@@ -1502,9 +1503,11 @@ void msm_dp_display_atomic_post_disable(struct msm_dp *dp)
 	 */
 	if (dp->bridge && dp->bridge->encoder && dpu_encoder_is_wedged(dp->bridge->encoder)) {
 		DRM_WARN("encoder wedged, performing safe DP clock/PHY cleanup\n");
+		guard(mutex)(&msm_dp_display->plugged_lock);
 		msm_dp_ctrl_off_wedged(msm_dp_display->ctrl);
 		msm_dp_display_host_phy_exit(msm_dp_display);
 		dp->power_on = false;
+		msm_dp_display->plugged = false;
 		msm_dp_display_handle_plugged_change(dp, false);
 		pm_runtime_put_sync(&dp->pdev->dev);
 		return;
