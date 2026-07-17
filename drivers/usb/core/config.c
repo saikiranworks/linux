@@ -915,10 +915,9 @@ int usb_get_configuration(struct usb_device *dev)
 	size_t usb_config_req_size;
 
 	/*
-	 * We usually start by grabbing the first 9-bytes descriptor so we know
-	 * how long the whole configuration is. Some devices with quirky
-	 * firmware will fail enumeration, so if the quirk is set, use 255 instead,
-	 * mirroring the behavior of Windows.
+	 * Devices with quirky firmware will stall or reset when the initial
+	 * config descriptor request uses wLength=9. If the quirk is set, use
+	 * 255 instead, mirroring the behavior of Windows.
 	 */
 	if (dev->quirks & USB_QUIRK_WINDOWS_CONFIG_REQ_SIZE)
 		usb_config_req_size = 255;
@@ -955,6 +954,12 @@ int usb_get_configuration(struct usb_device *dev)
 		return -ENOMEM;
 
 	for (cfgno = 0; cfgno < ncfg; cfgno++) {
+		/*
+		 * Normally we request only the configuration descriptor header
+		 * so we can determine the total configuration length. For
+		 * devices with USB_QUIRK_WINDOWS_CONFIG_REQ_SIZE set, try to
+		 * grab the full descriptor set instead.
+		 */
 		result = usb_get_descriptor(dev, USB_DT_CONFIG, cfgno,
 		    desc, usb_config_req_size);
 		if (result < 0) {
@@ -966,8 +971,8 @@ int usb_get_configuration(struct usb_device *dev)
 			dev->descriptor.bNumConfigurations = cfgno;
 			break;
 		} else if (result < 4) {
-			dev_err(ddev, "config index %d descriptor too short (asked for %zu, got %i)\n",
-			    cfgno, usb_config_req_size, result);
+			dev_err(ddev, "config index %d descriptor too short (asked for %zu, got %i, need at least %i)\n",
+			    cfgno, usb_config_req_size, result, 4);
 			result = -EINVAL;
 			goto err;
 		}
@@ -978,6 +983,16 @@ int usb_get_configuration(struct usb_device *dev)
 		if (!bigbuffer) {
 			result = -ENOMEM;
 			goto err;
+		}
+
+		/*
+		 * If the device returns the full configuration descriptor set,
+		 * skip the second read. Otherwise, send a second request
+		 * asking for the full set.
+		 */
+		if (result >= length) {
+			memcpy(bigbuffer, desc, length);
+			goto store_and_parse;
 		}
 
 		if (dev->quirks & USB_QUIRK_DELAY_INIT)
