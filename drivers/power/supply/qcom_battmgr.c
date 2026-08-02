@@ -1249,7 +1249,8 @@ static unsigned int qcom_battmgr_sc8280xp_parse_technology(const char *chemistry
 	    !strncmp(chemistry, "LiP", 3))
 		return POWER_SUPPLY_TECHNOLOGY_LIPO;
 
-	pr_err("Unknown battery technology '%s'\n", chemistry);
+	pr_err("Unknown battery technology '%.*s'\n",
+	       BATTMGR_CHEMISTRY_LEN, chemistry);
 	return POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
 }
 
