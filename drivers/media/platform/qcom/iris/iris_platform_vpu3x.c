@@ -91,7 +91,7 @@ static const struct tz_cp_config tz_cp_config_vpu3[] = {
 };
 
 const struct iris_platform_data glymur_data = {
-	.firmware_desc = &iris_vpu36_p4_s7_gen2_desc,
+	.firmware_desc_gen2 = &iris_vpu36_p4_s7_gen2_desc,
 	.vpu_ops = &iris_vpu36_ops,
 	.icc_tbl = iris_icc_info_vpu3x,
 	.icc_tbl_size = ARRAY_SIZE(iris_icc_info_vpu3x),
