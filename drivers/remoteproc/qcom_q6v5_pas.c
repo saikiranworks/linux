@@ -928,30 +928,42 @@ static int qcom_pas_probe(struct platform_device *pdev)
 		goto free_rproc;
 
 	ret = qcom_pas_alloc_memory_region(pas);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: qcom_pas_alloc_memory_region failed: %d\n", ret);
 		goto free_rproc;
+	}
 
 	ret = qcom_pas_assign_memory_region(pas);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: qcom_pas_assign_memory_region failed: %d\n", ret);
 		goto free_rproc;
+	}
 
 	ret = qcom_pas_init_clock(pas);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: qcom_pas_init_clock failed: %d\n", ret);
 		goto unassign_mem;
+	}
 
 	ret = qcom_pas_init_regulator(pas);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: qcom_pas_init_regulator failed: %d\n", ret);
 		goto unassign_mem;
+	}
 
 	ret = qcom_pas_pds_attach(&pdev->dev, pas->proxy_pds, desc->proxy_pd_names);
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(&pdev->dev, "diag: qcom_pas_pds_attach failed: %d\n", ret);
 		goto unassign_mem;
+	}
 	pas->proxy_pd_count = ret;
 
 	ret = qcom_q6v5_init(&pas->q6v5, pdev, rproc, desc->crash_reason_smem,
 			     desc->load_state, qcom_pas_handover);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: qcom_q6v5_init failed: %d\n", ret);
 		goto detach_proxy_pds;
+	}
 
 	/*
 	 * Unfortunately, the PAS interface does not provide a reliable way to

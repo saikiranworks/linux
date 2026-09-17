@@ -359,60 +359,80 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
 	init_completion(&q6v5->stop_done);
 
 	q6v5->wdog_irq = platform_get_irq_byname(pdev, "wdog");
-	if (q6v5->wdog_irq < 0)
+	if (q6v5->wdog_irq < 0) {
+		dev_err(&pdev->dev, "diag: wdog irq lookup failed: %d\n", q6v5->wdog_irq);
 		return q6v5->wdog_irq;
+	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->wdog_irq,
 					NULL, q6v5_wdog_interrupt,
 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					"q6v5 wdog", q6v5);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: wdog irq request failed: %d\n", ret);
 		return ret;
+	}
 
 	q6v5->fatal_irq = platform_get_irq_byname(pdev, "fatal");
-	if (q6v5->fatal_irq < 0)
+	if (q6v5->fatal_irq < 0) {
+		dev_err(&pdev->dev, "diag: fatal irq lookup failed: %d\n", q6v5->fatal_irq);
 		return q6v5->fatal_irq;
+	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->fatal_irq,
 					NULL, q6v5_fatal_interrupt,
 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					"q6v5 fatal", q6v5);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: fatal irq request failed: %d\n", ret);
 		return ret;
+	}
 
 	q6v5->ready_irq = platform_get_irq_byname(pdev, "ready");
-	if (q6v5->ready_irq < 0)
+	if (q6v5->ready_irq < 0) {
+		dev_err(&pdev->dev, "diag: ready irq lookup failed: %d\n", q6v5->ready_irq);
 		return q6v5->ready_irq;
+	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->ready_irq,
 					NULL, q6v5_ready_interrupt,
 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					"q6v5 ready", q6v5);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: ready irq request failed: %d\n", ret);
 		return ret;
+	}
 
 	q6v5->handover_irq = platform_get_irq_byname(pdev, "handover");
-	if (q6v5->handover_irq < 0)
+	if (q6v5->handover_irq < 0) {
+		dev_err(&pdev->dev, "diag: handover irq lookup failed: %d\n", q6v5->handover_irq);
 		return q6v5->handover_irq;
+	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->handover_irq,
 					NULL, q6v5_handover_interrupt,
 					IRQF_TRIGGER_RISING | IRQF_ONESHOT |
 					IRQF_NO_AUTOEN,
 					"q6v5 handover", q6v5);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: handover irq request failed: %d\n", ret);
 		return ret;
+	}
 
 	q6v5->stop_irq = platform_get_irq_byname(pdev, "stop-ack");
-	if (q6v5->stop_irq < 0)
+	if (q6v5->stop_irq < 0) {
+		dev_err(&pdev->dev, "diag: stop-ack irq lookup failed: %d\n", q6v5->stop_irq);
 		return q6v5->stop_irq;
+	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->stop_irq,
 					NULL, q6v5_stop_interrupt,
 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					"q6v5 stop", q6v5);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: stop-ack irq request failed: %d\n", ret);
 		return ret;
+	}
 
 	q6v5->state = devm_qcom_smem_state_get(&pdev->dev, "stop", &q6v5->stop_bit);
 	if (IS_ERR(q6v5->state)) {
@@ -428,6 +448,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
 					     "failed to acquire load state\n");
 		q6v5->qmp = NULL;
 	} else if (!q6v5->load_state) {
+		dev_err(&pdev->dev, "diag: load_state param=%s kstrdup=%p qmp=%p\n",
+			load_state, q6v5->load_state, q6v5->qmp);
 		if (!load_state)
 			dev_err(&pdev->dev, "load state resource string empty\n");
 
