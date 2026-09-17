@@ -859,8 +859,11 @@ static int qcom_pas_probe(struct platform_device *pdev)
 	int ret;
 
 	desc = of_device_get_match_data(&pdev->dev);
-	if (!desc)
+	if (!desc) {
+		dev_err(&pdev->dev, "diag: of_device_get_match_data returned NULL, compatible=%s\n",
+			pdev->dev.of_node ? of_node_full_name(pdev->dev.of_node) : "(no of_node)");
 		return -EINVAL;
+	}
 
 	if (!qcom_pas_is_available())
 		return -EPROBE_DEFER;
@@ -924,8 +927,10 @@ static int qcom_pas_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, pas);
 
 	ret = device_init_wakeup(pas->dev, true);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "diag: device_init_wakeup failed: %d\n", ret);
 		goto free_rproc;
+	}
 
 	ret = qcom_pas_alloc_memory_region(pas);
 	if (ret) {
