@@ -328,7 +328,7 @@ static const struct dmi_system_id hp_wmi_feature_boards[] __initconst = {
 	{
 		/* OMEN Slim 16-an0xxx, same generation as 8D41/8D87 */
 		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8D40") },
-		.driver_data = (void *)&omen_v1_no_ec_thermal_params,
+		.driver_data = (void *)&omen_v1_no_ec_board_params,
 	},
 	{
 		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8D41") },
