@@ -472,8 +472,9 @@ x1e80100-microsoft-romulus15-el2-dtbs	:= x1e80100-microsoft-romulus15.dtb x1-el2
 dtb-$(CONFIG_ARCH_QCOM)	+= x1e80100-microsoft-romulus15.dtb x1e80100-microsoft-romulus15-el2.dtb
 x1e80100-qcp-el2-dtbs	:= x1e80100-qcp.dtb x1-el2.dtbo
 dtb-$(CONFIG_ARCH_QCOM)	+= x1e80100-qcp.dtb x1e80100-qcp-el2.dtb
-x1p42100-acer-swift-go14-01-el2-dtbs	:= x1p42100-acer-swift-go14-01.dtb x1-el2.dtbo
-dtb-$(CONFIG_ARCH_QCOM)	+= x1p42100-acer-swift-go14-01.dtb x1p42100-acer-swift-go14-01-el2.dtb
+# FIXME: x1-acer-swift-14.dtsi is missing (lost in 25975cd91b5e), re-enable once restored
+#x1p42100-acer-swift-go14-01-el2-dtbs	:= x1p42100-acer-swift-go14-01.dtb x1-el2.dtbo
+#dtb-$(CONFIG_ARCH_QCOM)	+= x1p42100-acer-swift-go14-01.dtb x1p42100-acer-swift-go14-01-el2.dtb
 x1p42100-asus-vivobook-s15-el2-dtbs	:= x1p42100-asus-vivobook-s15.dtb x1-el2.dtbo
 dtb-$(CONFIG_ARCH_QCOM)	+= x1p42100-asus-vivobook-s15.dtb x1p42100-asus-vivobook-s15-el2.dtb
 x1p42100-asus-zenbook-a14-el2-dtbs	:= x1p42100-asus-zenbook-a14.dtb x1-el2.dtbo
@@ -500,8 +501,9 @@ x1p42100-lenovo-thinkbook-16-el2-dtbs	:= x1p42100-lenovo-thinkbook-16.dtb x1-el2
 dtb-$(CONFIG_ARCH_QCOM)	+= x1p42100-lenovo-thinkbook-16.dtb x1p42100-lenovo-thinkbook-16-el2.dtb
 x1p42100-microsoft-sp12in-el2-dtbs	:= x1p42100-microsoft-sp12in.dtb x1-el2.dtbo
 dtb-$(CONFIG_ARCH_QCOM)	+= x1p42100-microsoft-sp12in.dtb x1p42100-microsoft-sp12in-el2.dtb
-x1p64100-acer-swift-sf14-11-el2-dtbs	:= x1p64100-acer-swift-sf14-11.dtb x1-el2.dtbo
-dtb-$(CONFIG_ARCH_QCOM)	+= x1p64100-acer-swift-sf14-11.dtb x1p64100-acer-swift-sf14-11-el2.dtb
+# FIXME: x1-acer-swift-14.dtsi is missing (lost in 25975cd91b5e), re-enable once restored
+#x1p64100-acer-swift-sf14-11-el2-dtbs	:= x1p64100-acer-swift-sf14-11.dtb x1-el2.dtbo
+#dtb-$(CONFIG_ARCH_QCOM)	+= x1p64100-acer-swift-sf14-11.dtb x1p64100-acer-swift-sf14-11-el2.dtb
 x1p64100-dell-latitude-5455-el2-dtbs	:= x1p64100-dell-latitude-5455.dtb x1-el2.dtbo
 dtb-$(CONFIG_ARCH_QCOM)	+= x1p64100-dell-latitude-5455.dtb x1p64100-dell-latitude-5455-el2.dtb
 x1p64100-microsoft-denali-el2-dtbs	:= x1p64100-microsoft-denali.dtb x1-el2.dtbo
