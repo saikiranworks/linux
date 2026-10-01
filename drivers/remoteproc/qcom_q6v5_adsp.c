@@ -674,10 +674,7 @@ static int adsp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	if (desc->auto_boot)
-		rproc->auto_boot = RPROC_AUTO_BOOT_ATTACH_OR_START;
-	else
-		rproc->auto_boot = RPROC_AUTO_BOOT_DISABLED;
+	rproc->auto_boot = desc->auto_boot;
 	rproc->has_iommu = desc->has_iommu;
 	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
 

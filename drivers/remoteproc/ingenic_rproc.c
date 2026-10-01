@@ -177,10 +177,7 @@ static int ingenic_rproc_probe(struct platform_device *pdev)
 	if (!rproc)
 		return -ENOMEM;
 
-	if (auto_boot)
-		rproc->auto_boot = RPROC_AUTO_BOOT_ATTACH_OR_START;
-	else
-		rproc->auto_boot = RPROC_AUTO_BOOT_DISABLED;
+	rproc->auto_boot = auto_boot;
 
 	vpu = rproc->priv;
 	vpu->dev = &pdev->dev;
