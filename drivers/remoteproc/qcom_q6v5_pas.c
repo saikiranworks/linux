@@ -550,8 +550,12 @@ static int qcom_pas_attach(struct rproc *rproc)
 	bool stop_state;
 	int ret;
 
+	/*
+	 * Handover already happened before Linux booted. The handover IRQ is
+	 * requested with IRQF_NO_AUTOEN and only toggled through the guarded
+	 * helpers in qcom_q6v5.c, so leave it disabled here.
+	 */
 	pas->q6v5.handover_issued = true;
-	enable_irq(pas->q6v5.handover_irq);
 
 	pas->q6v5.running = true;
 	ret = irq_get_irqchip_state(pas->q6v5.fatal_irq,
@@ -597,7 +601,6 @@ unroll_attach:
 	pas->rproc->state = RPROC_OFFLINE;
 	ret = -EINVAL;
 disable_running:
-	disable_irq(pas->q6v5.handover_irq);
 	pas->q6v5.running = false;
 
 	return ret;
