@@ -811,10 +811,9 @@ int msm_csiphy_subdev_init(struct camss *camss,
 
 	csiphy->phy = devm_phy_get(dev, csiphy->name);
 
-	if (IS_ERR(csiphy->phy)) {
-		dev_err(dev, "failed to get phy %s %d\n", csiphy->name, ret);
-		return PTR_ERR(csiphy->phy);
-	}
+	if (IS_ERR(csiphy->phy))
+		return dev_err_probe(dev, PTR_ERR(csiphy->phy),
+				     "failed to get phy %s\n", csiphy->name);
 
 	ret = phy_init(csiphy->phy);
 	if (ret)
