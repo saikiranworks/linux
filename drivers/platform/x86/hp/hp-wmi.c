@@ -617,6 +617,8 @@ struct victus_s_fan_table {
  * 120s timeout
  */
 #define KEEP_ALIVE_DELAY_SECS     90
+/* Lowest user-selectable fan speed, in units of 100 RPM (800 RPM) */
+#define HP_FAN_MIN_USER_RPM       8
 
 static inline u8 rpm_to_pwm(u8 rpm, struct hp_wmi_hwmon_priv *priv)
 {
@@ -2960,9 +2962,14 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 			if (priv->mode != PWM_MODE_MANUAL)
 				return -EINVAL;
 
-			/* ensure PWM input is within valid fan speeds */
+			/*
+			 * Ensure PWM input is within valid fan speeds. Do not
+			 * clamp to the fan table minimum, as that is the BIOS
+			 * automatic floor and prevents quieter manual speeds.
+			 */
 			rpm = pwm_to_rpm(val, priv);
-			rpm = clamp_val(rpm, priv->min_rpm, priv->max_rpm);
+			rpm = clamp_val(rpm, min_t(u8, HP_FAN_MIN_USER_RPM, priv->max_rpm),
+					priv->max_rpm);
 			if (channel == CPU_FAN)
 				priv->cpu_pwm = rpm_to_pwm(rpm, priv);
 			else if (channel == GPU_FAN)
