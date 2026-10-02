@@ -79,13 +79,20 @@ static int qcom_smd_qrtr_probe(struct rpmsg_device *rpdev)
 		return rc;
 
 	/* Block sending until we have fully opened the channel */
-	guard(mutex)(&qdev->send_lock);
+	scoped_guard(mutex, &qdev->send_lock) {
+		rc = qrtr_endpoint_register(&qdev->ep, QRTR_EP_NID_AUTO);
+		if (rc)
+			return rc;
 
-	rc = qrtr_endpoint_register(&qdev->ep, QRTR_EP_NID_AUTO);
-	if (rc)
-		return rc;
+		qdev->channel = rpmsg_dev_open_ept(rpdev, qcom_smd_qrtr_callback, qdev);
+	}
 
-	qdev->channel = rpmsg_dev_open_ept(rpdev, qcom_smd_qrtr_callback, qdev);
+	/*
+	 * Drop send_lock before unregistering: the HELLO work queued by
+	 * qrtr_endpoint_register() may already hold node->ep_lock and be
+	 * waiting for send_lock in qcom_smd_qrtr_send(), while
+	 * qrtr_endpoint_unregister() needs node->ep_lock.
+	 */
 	if (!qdev->channel) {
 		qrtr_endpoint_unregister(&qdev->ep);
 		return -EREMOTEIO;
