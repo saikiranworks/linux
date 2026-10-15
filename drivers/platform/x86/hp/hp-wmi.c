@@ -28,6 +28,8 @@
 #include <linux/input/sparse-keymap.h>
 #include <linux/kernel.h>
 #include <linux/kstrtox.h>
+#include <linux/led-class-multicolor.h>
+#include <linux/leds.h>
 #include <linux/limits.h>
 #include <linux/minmax.h>
 #include <linux/module.h>
@@ -40,6 +42,8 @@
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
+
+#include <dt-bindings/leds/common.h>
 
 MODULE_AUTHOR("Matthew Garrett <mjg59@srcf.ucam.org>");
 MODULE_DESCRIPTION("HP laptop WMI driver");
@@ -818,6 +822,42 @@ static int hp_wmi_fourzone_set(u8 commandtype, void *buffer, size_t size)
 	return hp_wmi_perform_query(commandtype, HPWMI_FOURZONE, buffer, size, 0);
 }
 
+#define HP_WMI_FOURZONE_ZONES		4
+#define HP_WMI_FOURZONE_TABLE_SIZE	128
+#define HP_WMI_FOURZONE_COLOR_OFFSET	25
+
+/*
+ * Serializes read-modify-write cycles on the colour table: the firmware only
+ * accepts the whole table, so two writers touching different zones would
+ * otherwise overwrite each other.
+ */
+static DEFINE_MUTEX(hp_wmi_fourzone_lock);
+
+/* Read the zone colour table; the zone colours are 4 x RGB at COLOR_OFFSET. */
+static int hp_wmi_fourzone_read_table(u8 *table)
+{
+	int ret;
+
+	ret = hp_wmi_fourzone_get(HPWMI_FOURZONE_COLOR_GET, table,
+				  HP_WMI_FOURZONE_TABLE_SIZE);
+	if (ret)
+		return ret < 0 ? ret : -EIO;
+
+	return 0;
+}
+
+static int hp_wmi_fourzone_write_table(u8 *table)
+{
+	int ret;
+
+	ret = hp_wmi_fourzone_set(HPWMI_FOURZONE_COLOR_SET, table,
+				  HP_WMI_FOURZONE_TABLE_SIZE);
+	if (ret)
+		return ret < 0 ? ret : -EIO;
+
+	return 0;
+}
+
 static int hp_wmi_get_dock_state(void)
 {
 	int state = hp_wmi_read_int(HPWMI_HARDWARE_QUERY);
@@ -1202,22 +1242,23 @@ static ssize_t postcode_store(struct device *dev, struct device_attribute *attr,
 static ssize_t fourzone_color_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
-	u8 data[128] = {};
+	u8 data[HP_WMI_FOURZONE_TABLE_SIZE] = {};
 	int ret;
 
-	ret = hp_wmi_fourzone_get(HPWMI_FOURZONE_COLOR_GET, data, sizeof(data));
+	ret = hp_wmi_fourzone_read_table(data);
 	if (ret)
-		return ret < 0 ? ret : -EIO;
+		return ret;
 
-	return sysfs_emit(buf, "%*phN\n", 12, &data[25]);
+	return sysfs_emit(buf, "%*phN\n", 3 * HP_WMI_FOURZONE_ZONES,
+			  &data[HP_WMI_FOURZONE_COLOR_OFFSET]);
 }
 
 static ssize_t fourzone_color_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
-	u8 data[128] = {};
-	u8 user_colors[12] = {};
+	u8 data[HP_WMI_FOURZONE_TABLE_SIZE] = {};
+	u8 user_colors[3 * HP_WMI_FOURZONE_ZONES] = {};
 	int ret;
 	size_t len = count;
 
@@ -1231,15 +1272,17 @@ static ssize_t fourzone_color_store(struct device *dev,
 	if (ret)
 		return -EINVAL;
 
-	ret = hp_wmi_fourzone_get(HPWMI_FOURZONE_COLOR_GET, data, sizeof(data));
-	if (ret)
-		return ret < 0 ? ret : -EIO;
+	guard(mutex)(&hp_wmi_fourzone_lock);
 
-	memcpy(&data[25], user_colors, len / 2);
-
-	ret = hp_wmi_fourzone_set(HPWMI_FOURZONE_COLOR_SET, data, sizeof(data));
+	ret = hp_wmi_fourzone_read_table(data);
 	if (ret)
-		return ret < 0 ? ret : -EIO;
+		return ret;
+
+	memcpy(&data[HP_WMI_FOURZONE_COLOR_OFFSET], user_colors, len / 2);
+
+	ret = hp_wmi_fourzone_write_table(data);
+	if (ret)
+		return ret;
 
 	return count;
 }
@@ -2710,6 +2753,164 @@ static int thermal_profile_setup(struct platform_device *device)
 	return 0;
 }
 
+#if IS_REACHABLE(CONFIG_LEDS_CLASS_MULTICOLOR)
+/*
+ * Four-zone keyboard backlight as LED class devices.
+ *
+ *  - hp-wmi::kbd_backlight is the keyboard's global brightness (what
+ *    UPower/KDE and friends look for).
+ *  - hp-wmi:rgb:kbd_zoned_backlight-<zone> are one multicolor LED per zone,
+ *    controlling that zone's colour. The firmware has a single global
+ *    brightness, so a zone's LED brightness scales its colour in software.
+ *
+ * The firmware has no animations; effects are done by userspace streaming
+ * colours (through these LEDs or the fourzone_color attribute). The cached
+ * LED state can therefore be stale after fourzone_color has been written.
+ */
+struct hp_wmi_fourzone_led {
+	struct led_classdev_mc mc;
+	struct mc_subled subled[3];
+	unsigned int zone;
+	const char *label;
+};
+
+static struct hp_wmi_fourzone_led hp_wmi_fourzone_leds[HP_WMI_FOURZONE_ZONES] = {
+	{ .zone = 0, .label = "rgb:kbd_zoned_backlight-right" },
+	{ .zone = 1, .label = "rgb:kbd_zoned_backlight-middle" },
+	{ .zone = 2, .label = "rgb:kbd_zoned_backlight-left" },
+	{ .zone = 3, .label = "rgb:kbd_zoned_backlight-wasd" },
+};
+
+static struct led_classdev hp_wmi_kbd_backlight_led;
+
+static int hp_wmi_fourzone_led_set(struct led_classdev *cdev,
+				   enum led_brightness brightness)
+{
+	struct led_classdev_mc *mc = lcdev_to_mccdev(cdev);
+	struct hp_wmi_fourzone_led *led =
+		container_of(mc, struct hp_wmi_fourzone_led, mc);
+	u8 table[HP_WMI_FOURZONE_TABLE_SIZE] = {};
+	u8 *rgb = &table[HP_WMI_FOURZONE_COLOR_OFFSET + 3 * led->zone];
+	unsigned int i;
+	int ret;
+
+	led_mc_calc_color_components(mc, brightness);
+
+	guard(mutex)(&hp_wmi_fourzone_lock);
+
+	ret = hp_wmi_fourzone_read_table(table);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < ARRAY_SIZE(led->subled); i++)
+		rgb[i] = led->subled[i].brightness;
+
+	return hp_wmi_fourzone_write_table(table);
+}
+
+static int hp_wmi_kbd_backlight_set(struct led_classdev *cdev,
+				    enum led_brightness brightness)
+{
+	u8 value = brightness;
+	int ret;
+
+	ret = hp_wmi_fourzone_set(HPWMI_FOURZONE_BRIGHT_SET, &value, sizeof(value));
+	if (ret)
+		return ret < 0 ? ret : -EIO;
+
+	return 0;
+}
+
+static enum led_brightness hp_wmi_kbd_backlight_get(struct led_classdev *cdev)
+{
+	u8 data[16] = {};
+
+	if (hp_wmi_fourzone_get(HPWMI_FOURZONE_BRIGHT_GET, data, sizeof(data)))
+		return cdev->brightness;
+
+	return data[0];
+}
+
+static int hp_wmi_fourzone_leds_setup(struct device *dev)
+{
+	static const unsigned int color_ids[] = {
+		LED_COLOR_ID_RED, LED_COLOR_ID_GREEN, LED_COLOR_ID_BLUE,
+	};
+	u8 table[HP_WMI_FOURZONE_TABLE_SIZE] = {};
+	u8 data[16] = {};
+	unsigned int zone, i;
+	int ret;
+
+	/* Boards without a four-zone keyboard reject the colour table query. */
+	ret = hp_wmi_fourzone_read_table(table);
+	if (ret)
+		return ret;
+
+	if (!hp_wmi_fourzone_get(HPWMI_FOURZONE_BRIGHT_GET, data, sizeof(data))) {
+		struct led_init_data init_data = {
+			.default_label = ":" LED_FUNCTION_KBD_BACKLIGHT,
+			.devicename = "hp-wmi",
+			.devname_mandatory = true,
+		};
+
+		hp_wmi_kbd_backlight_led.max_brightness = U8_MAX;
+		hp_wmi_kbd_backlight_led.brightness = data[0];
+		hp_wmi_kbd_backlight_led.flags = LED_REJECT_NAME_CONFLICT;
+		hp_wmi_kbd_backlight_led.brightness_set_blocking = hp_wmi_kbd_backlight_set;
+		hp_wmi_kbd_backlight_led.brightness_get = hp_wmi_kbd_backlight_get;
+
+		ret = devm_led_classdev_register_ext(dev, &hp_wmi_kbd_backlight_led,
+						     &init_data);
+		if (ret)
+			return ret;
+	}
+
+	for (zone = 0; zone < HP_WMI_FOURZONE_ZONES; zone++) {
+		struct hp_wmi_fourzone_led *led = &hp_wmi_fourzone_leds[zone];
+		const u8 *rgb = &table[HP_WMI_FOURZONE_COLOR_OFFSET + 3 * zone];
+		unsigned int level = max3(rgb[0], rgb[1], rgb[2]);
+		struct led_init_data init_data = {
+			.default_label = led->label,
+			.devicename = "hp-wmi",
+			.devname_mandatory = true,
+		};
+
+		/*
+		 * Split the current colour into a brightness and full-scale
+		 * intensities so the LED reports what the keyboard shows. An
+		 * off zone keeps white intensities so raising its brightness
+		 * does something visible.
+		 */
+		for (i = 0; i < ARRAY_SIZE(led->subled); i++) {
+			led->subled[i].color_index = color_ids[i];
+			led->subled[i].channel = i;
+			led->subled[i].intensity = level ?
+				DIV_ROUND_CLOSEST(rgb[i] * U8_MAX, level) : U8_MAX;
+		}
+
+		led->mc.led_cdev.max_brightness = U8_MAX;
+		led->mc.led_cdev.brightness = level;
+		led->mc.led_cdev.color = LED_COLOR_ID_RGB;
+		led->mc.led_cdev.flags = LED_REJECT_NAME_CONFLICT;
+		led->mc.led_cdev.brightness_set_blocking = hp_wmi_fourzone_led_set;
+		led->mc.subled_info = led->subled;
+		led->mc.num_colors = ARRAY_SIZE(led->subled);
+
+		ret = devm_led_classdev_multicolor_register_ext(dev, &led->mc,
+								&init_data);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+#else
+static inline int hp_wmi_fourzone_leds_setup(struct device *dev)
+{
+	return -ENODEV;
+}
+#endif /* CONFIG_LEDS_CLASS_MULTICOLOR */
+
 static int hp_wmi_hwmon_init(void);
 
 static int __init hp_wmi_bios_setup(struct platform_device *device)
@@ -2738,6 +2939,11 @@ static int __init hp_wmi_bios_setup(struct platform_device *device)
 		return err;
 
 	thermal_profile_setup(device);
+
+	/* Optional: boards without the keyboard, or without LED support, just skip it. */
+	err = hp_wmi_fourzone_leds_setup(&device->dev);
+	if (err && err != -ENODEV && err != -EIO)
+		pr_warn("keyboard LED setup failed: %d\n", err);
 
 	return 0;
 }
